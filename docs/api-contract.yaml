@@ -1,0 +1,2528 @@
+"openapi": "3.0.3"
+"info":
+  "title": "Hotel Reservation & Guest Service Management Platform — V1"
+  "version": "1.0.0-draft"
+  "description": "Hợp đồng mục tiêu, KHÔNG phải backend đã hoàn tất. Căn cứ Hotel_Project_Full_Plan_V1(1).md mục 5,7–12. M2 chưa có Controller/Service truy cập dữ liệu. x-owner phân công M2/M3; x-roles cần thực thi ở backend. Cookie name và mã lỗi framework/404 invoice/order còn chờ chốt tại docs/m2-decisions.md. Success DTO trực tiếp; danh sách wrapper; tiền VND chuỗi nguyên. Request unknown fields bị cấm trong hợp đồng; mapper hiện tại chưa bật strict toàn hệ thống, cần M3 thống nhất khi tích hợp."
+"servers":
+  - "url": "/"
+    "description": "Cùng origin với frontend / reverse proxy; chưa publish backend."
+"security":
+  -
+    "SessionCookie": []
+"tags":
+  -
+    "name": "Rooms"
+    "description": "Tìm và xem phòng công khai (M2)."
+  -
+    "name": "RoomHolds"
+    "description": "API hold M2, thao tác Redis nguyên tử M3."
+  -
+    "name": "Bookings"
+    "description": "Đặt, xem, hủy và nhận phòng (M2)."
+  -
+    "name": "Services"
+    "description": "Danh mục và đơn dịch vụ trong kỳ ở (M2)."
+  -
+    "name": "Housekeeping"
+    "description": "Trạng thái dọn phòng, không trả PII (M2)."
+  -
+    "name": "Billing"
+    "description": "Preview, check-out và snapshot hóa đơn (M2)."
+  -
+    "name": "AuthGuest"
+    "description": "Session, CSRF và hồ sơ khách do M3 sở hữu; chỉ đặc tả để tích hợp."
+"paths":
+  "/api/rooms/available":
+    "get":
+      "operationId": "findAvailableRooms"
+      "summary": "Tìm phòng trống"
+      "description": "Ngày nhận >= hôm nay Asia/Ho_Chi_Minh; ngày trả > ngày nhận. ACTIVE, capacity đủ; CONFIRMED/CHECKED_IN chặn [in,out). DIRTY vẫn xuất hiện. Không tải hold Redis. Sort id tăng; search không cam kết còn phòng."
+      "x-owner": "M2"
+      "x-roles":
+        - "PUBLIC"
+      "tags":
+        - "Rooms"
+      "security": []
+      "parameters":
+        -
+          "$ref": "#/components/parameters/Page"
+        -
+          "$ref": "#/components/parameters/Size"
+        -
+          "name": "checkInDate"
+          "in": "query"
+          "required": true
+          "schema":
+            "type": "string"
+            "format": "date"
+        -
+          "name": "checkOutDate"
+          "in": "query"
+          "required": true
+          "schema":
+            "type": "string"
+            "format": "date"
+        -
+          "name": "guestCount"
+          "in": "query"
+          "required": true
+          "schema":
+            "type": "integer"
+            "format": "int32"
+            "minimum": 1
+      "responses":
+        "200":
+          "description": "Thành công"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/AvailableRoomPage"
+        "400":
+          "description": "400; VALIDATION_ERROR / dữ liệu không hợp lệ"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/ApiError"
+        "500":
+          "description": "500; INTERNAL_ERROR"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/ApiError"
+  "/api/rooms/{roomId}":
+    "get":
+      "operationId": "getRoom"
+      "summary": "Xem phòng"
+      "description": "Theo đặc tả V1. Đây là hợp đồng mục tiêu, chưa xác nhận endpoint chạy."
+      "x-owner": "M2"
+      "x-roles":
+        - "PUBLIC"
+      "tags":
+        - "Rooms"
+      "security": []
+      "parameters":
+        -
+          "$ref": "#/components/parameters/roomId"
+      "responses":
+        "200":
+          "description": "Thành công"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/RoomResponse"
+        "400":
+          "description": "400; VALIDATION_ERROR / dữ liệu không hợp lệ"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/ApiError"
+        "404":
+          "description": "404; Xem ApiError và docs/m2-decisions.md"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/ApiError"
+        "500":
+          "description": "500; INTERNAL_ERROR"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/ApiError"
+  "/api/room-holds":
+    "post":
+      "operationId": "createRoomHold"
+      "summary": "Giữ toàn bộ phòng 15 phút"
+      "description": "Transaction khóa Room, kiểm tra lịch rồi SET NX + TTL. Không ghi đè/gia hạn hold. Redis lỗi trả 503. Key room-hold:{roomId}; hold gắn user/phòng/ngày/số khách."
+      "x-owner": "M2"
+      "x-roles":
+        - "GUEST"
+        - "FRONT_DESK"
+      "tags":
+        - "RoomHolds"
+      "security":
+        -
+          "SessionCookie": []
+          "CsrfToken": []
+      "requestBody":
+        "required": true
+        "content":
+          "application/json":
+            "schema":
+              "$ref": "#/components/schemas/CreateRoomHoldRequest"
+      "responses":
+        "201":
+          "description": "Tạo thành công"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/RoomHoldResponse"
+        "400":
+          "description": "400; VALIDATION_ERROR / dữ liệu không hợp lệ"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/ApiError"
+        "401":
+          "description": "401; UNAUTHENTICATED"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/ApiError"
+        "403":
+          "description": "403; ACCESS_DENIED; role/CSRF/chủ hold"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/ApiError"
+        "404":
+          "description": "404; Xem ApiError và docs/m2-decisions.md"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/ApiError"
+        "409":
+          "description": "409; Xem ApiError và docs/m2-decisions.md"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/ApiError"
+        "500":
+          "description": "500; INTERNAL_ERROR"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/ApiError"
+        "503":
+          "description": "503; Xem ApiError và docs/m2-decisions.md"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/ApiError"
+  "/api/room-holds/{holdToken}/release":
+    "post":
+      "operationId": "releaseRoomHold"
+      "summary": "Chủ hold giải phóng"
+      "description": "Xóa nguyên tử có kiểm tra chủ/token. Đã xóa hoặc hết hạn trả 204; token còn tồn tại thuộc người khác trả 403. Không GET rồi DEL; 503 lúc release là đề xuất cần nhóm chốt."
+      "x-owner": "M2"
+      "x-roles":
+        - "GUEST"
+        - "FRONT_DESK"
+      "tags":
+        - "RoomHolds"
+      "security":
+        -
+          "SessionCookie": []
+          "CsrfToken": []
+      "parameters":
+        -
+          "$ref": "#/components/parameters/holdToken"
+      "responses":
+        "204":
+          "description": "Thành công, không body"
+        "400":
+          "description": "400; VALIDATION_ERROR / dữ liệu không hợp lệ"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/ApiError"
+        "401":
+          "description": "401; UNAUTHENTICATED"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/ApiError"
+        "403":
+          "description": "403; ACCESS_DENIED; role/CSRF/chủ hold"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/ApiError"
+        "500":
+          "description": "500; INTERNAL_ERROR"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/ApiError"
+        "503":
+          "description": "503; Xem ApiError và docs/m2-decisions.md"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/ApiError"
+  "/api/bookings":
+    "post":
+      "operationId": "createBooking"
+      "summary": "Tạo booking"
+      "description": "GUEST cấm guestId kể cả null; FRONT_DESK bắt buộc guestId hợp lệ. Backend chốt giá/người tạo/trạng thái. READ_COMMITTED, khóa Room trước verify hold và kiểm tra giao nhau. Sau commit compare-delete best effort; cleanup lỗi không đổi booking thành thất bại. Không tự retry POST."
+      "x-owner": "M2"
+      "x-roles":
+        - "GUEST"
+        - "FRONT_DESK"
+      "tags":
+        - "Bookings"
+      "security":
+        -
+          "SessionCookie": []
+          "CsrfToken": []
+      "requestBody":
+        "required": true
+        "content":
+          "application/json":
+            "schema":
+              "$ref": "#/components/schemas/CreateBookingRequest"
+      "responses":
+        "201":
+          "description": "Tạo thành công"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/BookingResponse"
+        "400":
+          "description": "400; VALIDATION_ERROR / dữ liệu không hợp lệ"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/ApiError"
+        "401":
+          "description": "401; UNAUTHENTICATED"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/ApiError"
+        "403":
+          "description": "403; ACCESS_DENIED; role/CSRF/chủ hold"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/ApiError"
+        "404":
+          "description": "404; Xem ApiError và docs/m2-decisions.md"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/ApiError"
+        "409":
+          "description": "409; Xem ApiError và docs/m2-decisions.md"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/ApiError"
+        "500":
+          "description": "500; INTERNAL_ERROR"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/ApiError"
+        "503":
+          "description": "503; Xem ApiError và docs/m2-decisions.md"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/ApiError"
+    "get":
+      "operationId": "listBookings"
+      "summary": "Liệt kê booking"
+      "description": "GUEST chỉ của mình từ principal; FRONT_DESK tất cả. checkInDate là lọc bằng ngày nhận. Sort id tăng."
+      "x-owner": "M2"
+      "x-roles":
+        - "GUEST"
+        - "FRONT_DESK"
+      "tags":
+        - "Bookings"
+      "security":
+        -
+          "SessionCookie": []
+      "parameters":
+        -
+          "$ref": "#/components/parameters/Page"
+        -
+          "$ref": "#/components/parameters/Size"
+        -
+          "name": "bookingStatus"
+          "in": "query"
+          "required": false
+          "schema":
+            "$ref": "#/components/schemas/BookingStatus"
+        -
+          "name": "checkInDate"
+          "in": "query"
+          "required": false
+          "schema":
+            "type": "string"
+            "format": "date"
+      "responses":
+        "200":
+          "description": "Thành công"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/BookingPage"
+        "400":
+          "description": "400; VALIDATION_ERROR / dữ liệu không hợp lệ"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/ApiError"
+        "401":
+          "description": "401; UNAUTHENTICATED"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/ApiError"
+        "403":
+          "description": "403; ACCESS_DENIED; role/CSRF/chủ hold"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/ApiError"
+        "500":
+          "description": "500; INTERNAL_ERROR"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/ApiError"
+  "/api/bookings/{bookingId}":
+    "get":
+      "operationId": "getBooking"
+      "summary": "Xem booking"
+      "description": "GUEST khác chủ trả 404, không trả thông tin tồn tại của tài nguyên."
+      "x-owner": "M2"
+      "x-roles":
+        - "GUEST"
+        - "FRONT_DESK"
+      "tags":
+        - "Bookings"
+      "security":
+        -
+          "SessionCookie": []
+      "parameters":
+        -
+          "$ref": "#/components/parameters/bookingId"
+      "responses":
+        "200":
+          "description": "Thành công"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/BookingResponse"
+        "400":
+          "description": "400; VALIDATION_ERROR / dữ liệu không hợp lệ"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/ApiError"
+        "401":
+          "description": "401; UNAUTHENTICATED"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/ApiError"
+        "403":
+          "description": "403; ACCESS_DENIED; role/CSRF/chủ hold"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/ApiError"
+        "404":
+          "description": "404; Xem ApiError và docs/m2-decisions.md"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/ApiError"
+        "500":
+          "description": "500; INTERNAL_ERROR"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/ApiError"
+  "/api/bookings/{bookingId}/cancel":
+    "post":
+      "operationId": "cancelBooking"
+      "summary": "Hủy booking trước ngày nhận"
+      "description": "CONFIRMED và hôm nay < checkInDate. CANCELLED lặp trả cũ, không đổi cancelledAt (sau ownership). Khác chủ 404."
+      "x-owner": "M2"
+      "x-roles":
+        - "GUEST"
+        - "FRONT_DESK"
+      "tags":
+        - "Bookings"
+      "security":
+        -
+          "SessionCookie": []
+          "CsrfToken": []
+      "parameters":
+        -
+          "$ref": "#/components/parameters/bookingId"
+      "responses":
+        "200":
+          "description": "Thành công"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/BookingResponse"
+        "400":
+          "description": "400; VALIDATION_ERROR / dữ liệu không hợp lệ"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/ApiError"
+        "401":
+          "description": "401; UNAUTHENTICATED"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/ApiError"
+        "403":
+          "description": "403; ACCESS_DENIED; role/CSRF/chủ hold"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/ApiError"
+        "404":
+          "description": "404; Xem ApiError và docs/m2-decisions.md"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/ApiError"
+        "409":
+          "description": "409; Xem ApiError và docs/m2-decisions.md"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/ApiError"
+        "500":
+          "description": "500; INTERNAL_ERROR"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/ApiError"
+  "/api/bookings/{bookingId}/check-in":
+    "post":
+      "operationId": "checkIn"
+      "summary": "Nhận phòng"
+      "description": "Khóa Room → Booking; CONFIRMED, đúng ngày nhận, ACTIVE, CLEAN. CHECKED_IN lặp trả cũ không ghi lại checkedInAt."
+      "x-owner": "M2"
+      "x-roles":
+        - "FRONT_DESK"
+      "tags":
+        - "Bookings"
+      "security":
+        -
+          "SessionCookie": []
+          "CsrfToken": []
+      "parameters":
+        -
+          "$ref": "#/components/parameters/bookingId"
+      "responses":
+        "200":
+          "description": "Thành công"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/BookingResponse"
+        "400":
+          "description": "400; VALIDATION_ERROR / dữ liệu không hợp lệ"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/ApiError"
+        "401":
+          "description": "401; UNAUTHENTICATED"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/ApiError"
+        "403":
+          "description": "403; ACCESS_DENIED; role/CSRF/chủ hold"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/ApiError"
+        "404":
+          "description": "404; Xem ApiError và docs/m2-decisions.md"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/ApiError"
+        "409":
+          "description": "409; Xem ApiError và docs/m2-decisions.md"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/ApiError"
+        "500":
+          "description": "500; INTERNAL_ERROR"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/ApiError"
+  "/api/hotel-services":
+    "get":
+      "operationId": "listHotelServices"
+      "summary": "Danh mục dịch vụ active"
+      "description": "Theo đặc tả V1. Đây là hợp đồng mục tiêu, chưa xác nhận endpoint chạy."
+      "x-owner": "M2"
+      "x-roles":
+        - "PUBLIC"
+      "tags":
+        - "Services"
+      "security": []
+      "parameters":
+        -
+          "$ref": "#/components/parameters/Page"
+        -
+          "$ref": "#/components/parameters/Size"
+      "responses":
+        "200":
+          "description": "Thành công"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/HotelServicePage"
+        "400":
+          "description": "400; VALIDATION_ERROR / dữ liệu không hợp lệ"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/ApiError"
+        "500":
+          "description": "500; INTERNAL_ERROR"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/ApiError"
+  "/api/bookings/{bookingId}/service-orders":
+    "post":
+      "operationId": "createServiceOrder"
+      "summary": "Gọi dịch vụ"
+      "description": "Khóa Booking cha trước kiểm tra CHECKED_IN và hôm nay <= ngày trả. GUEST đúng chủ. Items không rỗng/trùng hotelServiceId, quantity > 0, dịch vụ active. Snapshot tên/giá; không tự retry POST."
+      "x-owner": "M2"
+      "x-roles":
+        - "GUEST"
+        - "FRONT_DESK"
+      "tags":
+        - "Services"
+      "security":
+        -
+          "SessionCookie": []
+          "CsrfToken": []
+      "parameters":
+        -
+          "$ref": "#/components/parameters/bookingId"
+      "requestBody":
+        "required": true
+        "content":
+          "application/json":
+            "schema":
+              "$ref": "#/components/schemas/CreateServiceOrderRequest"
+      "responses":
+        "201":
+          "description": "Tạo thành công"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/ServiceOrderResponse"
+        "400":
+          "description": "400; VALIDATION_ERROR / dữ liệu không hợp lệ"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/ApiError"
+        "401":
+          "description": "401; UNAUTHENTICATED"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/ApiError"
+        "403":
+          "description": "403; ACCESS_DENIED; role/CSRF/chủ hold"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/ApiError"
+        "404":
+          "description": "404; Xem ApiError và docs/m2-decisions.md"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/ApiError"
+        "409":
+          "description": "409; Xem ApiError và docs/m2-decisions.md"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/ApiError"
+        "500":
+          "description": "500; INTERNAL_ERROR"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/ApiError"
+    "get":
+      "operationId": "listServiceOrders"
+      "summary": "Xem đơn dịch vụ"
+      "description": "Kiểm tra chủ booking hoặc FRONT_DESK; sort id tăng."
+      "x-owner": "M2"
+      "x-roles":
+        - "GUEST"
+        - "FRONT_DESK"
+      "tags":
+        - "Services"
+      "security":
+        -
+          "SessionCookie": []
+      "parameters":
+        -
+          "$ref": "#/components/parameters/bookingId"
+        -
+          "$ref": "#/components/parameters/Page"
+        -
+          "$ref": "#/components/parameters/Size"
+      "responses":
+        "200":
+          "description": "Thành công"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/ServiceOrderPage"
+        "400":
+          "description": "400; VALIDATION_ERROR / dữ liệu không hợp lệ"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/ApiError"
+        "401":
+          "description": "401; UNAUTHENTICATED"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/ApiError"
+        "403":
+          "description": "403; ACCESS_DENIED; role/CSRF/chủ hold"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/ApiError"
+        "404":
+          "description": "404; Xem ApiError và docs/m2-decisions.md"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/ApiError"
+        "500":
+          "description": "500; INTERNAL_ERROR"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/ApiError"
+  "/api/service-orders/{serviceOrderId}/cancel":
+    "post":
+      "operationId": "cancelServiceOrder"
+      "summary": "Hủy đơn dịch vụ"
+      "description": "Khóa Booking cha, yêu cầu CHECKED_IN. ORDERED → CANCELLED; lặp CANCELLED chỉ thành công khi booking vẫn CHECKED_IN. Sau check-out bị từ chối."
+      "x-owner": "M2"
+      "x-roles":
+        - "FRONT_DESK"
+      "tags":
+        - "Services"
+      "security":
+        -
+          "SessionCookie": []
+          "CsrfToken": []
+      "parameters":
+        -
+          "$ref": "#/components/parameters/serviceOrderId"
+      "responses":
+        "200":
+          "description": "Thành công"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/ServiceOrderResponse"
+        "400":
+          "description": "400; VALIDATION_ERROR / dữ liệu không hợp lệ"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/ApiError"
+        "401":
+          "description": "401; UNAUTHENTICATED"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/ApiError"
+        "403":
+          "description": "403; ACCESS_DENIED; role/CSRF/chủ hold"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/ApiError"
+        "404":
+          "description": "404; Xem ApiError và docs/m2-decisions.md"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/ApiError"
+        "409":
+          "description": "409; Xem ApiError và docs/m2-decisions.md"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/ApiError"
+        "500":
+          "description": "500; INTERNAL_ERROR"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/ApiError"
+  "/api/housekeeping/rooms":
+    "get":
+      "operationId": "listHousekeepingRooms"
+      "summary": "Danh sách dọn phòng"
+      "description": "isOccupied dựa có booking CHECKED_IN, không theo ngày tìm kiếm; không trả PII. Sort id tăng."
+      "x-owner": "M2"
+      "x-roles":
+        - "HOUSEKEEPING"
+        - "FRONT_DESK"
+      "tags":
+        - "Housekeeping"
+      "security":
+        -
+          "SessionCookie": []
+      "parameters":
+        -
+          "$ref": "#/components/parameters/Page"
+        -
+          "$ref": "#/components/parameters/Size"
+        -
+          "name": "housekeepingStatus"
+          "in": "query"
+          "required": false
+          "schema":
+            "$ref": "#/components/schemas/HousekeepingStatus"
+      "responses":
+        "200":
+          "description": "Thành công"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/HousekeepingRoomPage"
+        "400":
+          "description": "400; VALIDATION_ERROR / dữ liệu không hợp lệ"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/ApiError"
+        "401":
+          "description": "401; UNAUTHENTICATED"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/ApiError"
+        "403":
+          "description": "403; ACCESS_DENIED; role/CSRF/chủ hold"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/ApiError"
+        "500":
+          "description": "500; INTERNAL_ERROR"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/ApiError"
+  "/api/housekeeping/rooms/{roomId}/status":
+    "patch":
+      "operationId": "updateHousekeepingStatus"
+      "summary": "Cập nhật dọn phòng"
+      "description": "Khóa Room; chặn nếu có CHECKED_IN kể cả request cùng trạng thái. DIRTY → IN_PROGRESS → CLEAN; cùng trạng thái khi không occupied thành công không side effect. CLEAN → DIRTY chỉ hệ thống check-out."
+      "x-owner": "M2"
+      "x-roles":
+        - "HOUSEKEEPING"
+        - "FRONT_DESK"
+      "tags":
+        - "Housekeeping"
+      "security":
+        -
+          "SessionCookie": []
+          "CsrfToken": []
+      "parameters":
+        -
+          "$ref": "#/components/parameters/roomId"
+      "requestBody":
+        "required": true
+        "content":
+          "application/json":
+            "schema":
+              "$ref": "#/components/schemas/UpdateHousekeepingStatusRequest"
+      "responses":
+        "200":
+          "description": "Thành công"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/HousekeepingRoomResponse"
+        "400":
+          "description": "400; VALIDATION_ERROR / dữ liệu không hợp lệ"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/ApiError"
+        "401":
+          "description": "401; UNAUTHENTICATED"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/ApiError"
+        "403":
+          "description": "403; ACCESS_DENIED; role/CSRF/chủ hold"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/ApiError"
+        "404":
+          "description": "404; Xem ApiError và docs/m2-decisions.md"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/ApiError"
+        "409":
+          "description": "409; Xem ApiError và docs/m2-decisions.md"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/ApiError"
+        "500":
+          "description": "500; INTERNAL_ERROR"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/ApiError"
+  "/api/bookings/{bookingId}/bill-preview":
+    "get":
+      "operationId": "previewBill"
+      "summary": "Tính hóa đơn tạm"
+      "description": "Chủ hoặc FRONT_DESK; CONFIRMED/CHECKED_IN. CANCELLED bị từ chối; CHECKED_OUT dùng invoice API, không trả InvoiceResponse trên endpoint này. canCheckOut = CHECKED_IN và checkInDate <= hôm nay <= checkOutDate (biên checkout cần nhóm xác nhận). Tiền phòng đủ kỳ đặt + đơn ORDERED; không lưu invoice."
+      "x-owner": "M2"
+      "x-roles":
+        - "GUEST"
+        - "FRONT_DESK"
+      "tags":
+        - "Billing"
+      "security":
+        -
+          "SessionCookie": []
+      "parameters":
+        -
+          "$ref": "#/components/parameters/bookingId"
+      "responses":
+        "200":
+          "description": "Thành công"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/BillPreviewResponse"
+        "400":
+          "description": "400; VALIDATION_ERROR / dữ liệu không hợp lệ"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/ApiError"
+        "401":
+          "description": "401; UNAUTHENTICATED"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/ApiError"
+        "403":
+          "description": "403; ACCESS_DENIED; role/CSRF/chủ hold"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/ApiError"
+        "404":
+          "description": "404; Xem ApiError và docs/m2-decisions.md"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/ApiError"
+        "409":
+          "description": "409; Xem ApiError và docs/m2-decisions.md"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/ApiError"
+        "500":
+          "description": "500; INTERNAL_ERROR"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/ApiError"
+  "/api/bookings/{bookingId}/check-out":
+    "post":
+      "operationId": "checkOut"
+      "summary": "Thu tiền và trả phòng"
+      "description": "Khóa Room → Booking; CHECKED_OUT lặp trả invoice đã lưu. Nếu chưa hoàn tất: CHECKED_IN và trong ngày cho phép; tính lại tiền ORDERED, khác expected trả 409 BILL_CHANGED kèm details.currentTotalAmount. Một transaction lưu PAID/items snapshot + booking CHECKED_OUT + room DIRTY; lỗi rollback. Trả sớm đủ tiền phòng đã đặt."
+      "x-owner": "M2"
+      "x-roles":
+        - "FRONT_DESK"
+      "tags":
+        - "Billing"
+      "security":
+        -
+          "SessionCookie": []
+          "CsrfToken": []
+      "parameters":
+        -
+          "$ref": "#/components/parameters/bookingId"
+      "requestBody":
+        "required": true
+        "content":
+          "application/json":
+            "schema":
+              "$ref": "#/components/schemas/CheckOutRequest"
+      "responses":
+        "200":
+          "description": "Thành công"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/InvoiceResponse"
+        "400":
+          "description": "400; VALIDATION_ERROR / dữ liệu không hợp lệ"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/ApiError"
+        "401":
+          "description": "401; UNAUTHENTICATED"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/ApiError"
+        "403":
+          "description": "403; ACCESS_DENIED; role/CSRF/chủ hold"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/ApiError"
+        "404":
+          "description": "404; Xem ApiError và docs/m2-decisions.md"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/ApiError"
+        "409":
+          "description": "409; Xem ApiError và docs/m2-decisions.md"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/ApiError"
+              "examples":
+                "billChanged":
+                  "summary": "Ví dụ BILL_CHANGED khi check-out"
+                  "value":
+                    "code": "BILL_CHANGED"
+                    "message": "Tổng tiền đã thay đổi."
+                    "fieldErrors": []
+                    "details":
+                      "currentTotalAmount": "1500000"
+                    "timestamp": "2026-10-15T04:00:00Z"
+        "500":
+          "description": "500; INTERNAL_ERROR"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/ApiError"
+  "/api/me/invoices":
+    "get":
+      "operationId": "listMyInvoices"
+      "summary": "Hóa đơn của khách đăng nhập"
+      "description": "guestId từ principal, không nhận từ query; snapshot lịch sử; sort id tăng."
+      "x-owner": "M2"
+      "x-roles":
+        - "GUEST"
+      "tags":
+        - "Billing"
+      "security":
+        -
+          "SessionCookie": []
+      "parameters":
+        -
+          "$ref": "#/components/parameters/Page"
+        -
+          "$ref": "#/components/parameters/Size"
+      "responses":
+        "200":
+          "description": "Thành công"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/InvoicePage"
+        "400":
+          "description": "400; VALIDATION_ERROR / dữ liệu không hợp lệ"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/ApiError"
+        "401":
+          "description": "401; UNAUTHENTICATED"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/ApiError"
+        "403":
+          "description": "403; ACCESS_DENIED; role/CSRF/chủ hold"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/ApiError"
+        "500":
+          "description": "500; INTERNAL_ERROR"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/ApiError"
+  "/api/invoices/{invoiceId}":
+    "get":
+      "operationId": "getInvoice"
+      "summary": "Xem hóa đơn"
+      "description": "Chủ hóa đơn hoặc FRONT_DESK; sai chủ 404. Đọc snapshot đã lưu, không lấy giá/tên hiện tại."
+      "x-owner": "M2"
+      "x-roles":
+        - "GUEST"
+        - "FRONT_DESK"
+      "tags":
+        - "Billing"
+      "security":
+        -
+          "SessionCookie": []
+      "parameters":
+        -
+          "$ref": "#/components/parameters/invoiceId"
+      "responses":
+        "200":
+          "description": "Thành công"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/InvoiceResponse"
+        "400":
+          "description": "400; VALIDATION_ERROR / dữ liệu không hợp lệ"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/ApiError"
+        "401":
+          "description": "401; UNAUTHENTICATED"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/ApiError"
+        "403":
+          "description": "403; ACCESS_DENIED; role/CSRF/chủ hold"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/ApiError"
+        "404":
+          "description": "404; Xem ApiError và docs/m2-decisions.md"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/ApiError"
+        "500":
+          "description": "500; INTERNAL_ERROR"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/ApiError"
+  "/api/auth/csrf":
+    "get":
+      "operationId": "getCsrf"
+      "summary": "Lấy CSRF token"
+      "description": "Theo đặc tả V1. Đây là hợp đồng mục tiêu, chưa xác nhận endpoint chạy."
+      "x-owner": "M3"
+      "x-roles":
+        - "PUBLIC"
+      "tags":
+        - "AuthGuest"
+      "security": []
+      "responses":
+        "200":
+          "description": "Thành công"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/CsrfResponse"
+        "400":
+          "description": "400; VALIDATION_ERROR / dữ liệu không hợp lệ"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/ApiError"
+        "500":
+          "description": "500; INTERNAL_ERROR"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/ApiError"
+  "/api/auth/register":
+    "post":
+      "operationId": "register"
+      "summary": "Đăng ký khách"
+      "description": "Luôn GUEST; trim text trừ password; tạo User + Guest trong transaction, không tự đăng nhập. Không nhận role/userId."
+      "x-owner": "M3"
+      "x-roles":
+        - "PUBLIC"
+      "tags":
+        - "AuthGuest"
+      "security":
+        -
+          "CsrfToken": []
+      "requestBody":
+        "required": true
+        "content":
+          "application/json":
+            "schema":
+              "$ref": "#/components/schemas/RegisterRequest"
+      "responses":
+        "201":
+          "description": "Tạo thành công"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/GuestResponse"
+        "400":
+          "description": "400; VALIDATION_ERROR / dữ liệu không hợp lệ"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/ApiError"
+        "403":
+          "description": "403; ACCESS_DENIED; role/CSRF/chủ hold"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/ApiError"
+        "409":
+          "description": "409; Xem ApiError và docs/m2-decisions.md"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/ApiError"
+        "500":
+          "description": "500; INTERNAL_ERROR"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/ApiError"
+  "/api/auth/login":
+    "post":
+      "operationId": "login"
+      "summary": "Đăng nhập session"
+      "description": "Trả cookie phiên; thay session ID. Sau login M1 lấy CSRF token mới."
+      "x-owner": "M3"
+      "x-roles":
+        - "PUBLIC"
+      "tags":
+        - "AuthGuest"
+      "security":
+        -
+          "CsrfToken": []
+      "requestBody":
+        "required": true
+        "content":
+          "application/json":
+            "schema":
+              "$ref": "#/components/schemas/LoginRequest"
+      "responses":
+        "200":
+          "description": "Thành công"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/UserResponse"
+        "400":
+          "description": "400; VALIDATION_ERROR / dữ liệu không hợp lệ"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/ApiError"
+        "401":
+          "description": "401; Xem ApiError và docs/m2-decisions.md"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/ApiError"
+        "403":
+          "description": "403; ACCESS_DENIED; role/CSRF/chủ hold"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/ApiError"
+        "500":
+          "description": "500; INTERNAL_ERROR"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/ApiError"
+  "/api/auth/logout":
+    "post":
+      "operationId": "logout"
+      "summary": "Đăng xuất"
+      "description": "Hủy session và cookie. Sau logout lấy CSRF token mới."
+      "x-owner": "M3"
+      "x-roles":
+        - "GUEST"
+        - "FRONT_DESK"
+        - "HOUSEKEEPING"
+      "tags":
+        - "AuthGuest"
+      "security":
+        -
+          "SessionCookie": []
+          "CsrfToken": []
+      "responses":
+        "204":
+          "description": "Thành công, không body"
+        "400":
+          "description": "400; VALIDATION_ERROR / dữ liệu không hợp lệ"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/ApiError"
+        "401":
+          "description": "401; UNAUTHENTICATED"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/ApiError"
+        "403":
+          "description": "403; ACCESS_DENIED; role/CSRF/chủ hold"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/ApiError"
+        "500":
+          "description": "500; INTERNAL_ERROR"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/ApiError"
+  "/api/auth/me":
+    "get":
+      "operationId": "getCurrentUser"
+      "summary": "Người dùng phiên hiện tại"
+      "description": "Theo đặc tả V1. Đây là hợp đồng mục tiêu, chưa xác nhận endpoint chạy."
+      "x-owner": "M3"
+      "x-roles":
+        - "GUEST"
+        - "FRONT_DESK"
+        - "HOUSEKEEPING"
+      "tags":
+        - "AuthGuest"
+      "security":
+        -
+          "SessionCookie": []
+      "responses":
+        "200":
+          "description": "Thành công"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/UserResponse"
+        "400":
+          "description": "400; VALIDATION_ERROR / dữ liệu không hợp lệ"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/ApiError"
+        "401":
+          "description": "401; UNAUTHENTICATED"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/ApiError"
+        "403":
+          "description": "403; ACCESS_DENIED; role/CSRF/chủ hold"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/ApiError"
+        "500":
+          "description": "500; INTERNAL_ERROR"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/ApiError"
+  "/api/guests/me":
+    "get":
+      "operationId": "getMyProfile"
+      "summary": "Xem hồ sơ khách"
+      "description": "Theo đặc tả V1. Đây là hợp đồng mục tiêu, chưa xác nhận endpoint chạy."
+      "x-owner": "M3"
+      "x-roles":
+        - "GUEST"
+      "tags":
+        - "AuthGuest"
+      "security":
+        -
+          "SessionCookie": []
+      "responses":
+        "200":
+          "description": "Thành công"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/GuestResponse"
+        "400":
+          "description": "400; VALIDATION_ERROR / dữ liệu không hợp lệ"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/ApiError"
+        "401":
+          "description": "401; UNAUTHENTICATED"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/ApiError"
+        "403":
+          "description": "403; ACCESS_DENIED; role/CSRF/chủ hold"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/ApiError"
+        "500":
+          "description": "500; INTERNAL_ERROR"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/ApiError"
+    "patch":
+      "operationId": "updateMyProfile"
+      "summary": "Cập nhật trường hồ sơ được gửi"
+      "description": "Trim text trước validation; chỉ cập nhật fullName/phone được gửi; không đổi email đăng nhập."
+      "x-owner": "M3"
+      "x-roles":
+        - "GUEST"
+      "tags":
+        - "AuthGuest"
+      "security":
+        -
+          "SessionCookie": []
+          "CsrfToken": []
+      "requestBody":
+        "required": true
+        "content":
+          "application/json":
+            "schema":
+              "$ref": "#/components/schemas/UpdateGuestRequest"
+      "responses":
+        "200":
+          "description": "Thành công"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/GuestResponse"
+        "400":
+          "description": "400; VALIDATION_ERROR / dữ liệu không hợp lệ"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/ApiError"
+        "401":
+          "description": "401; UNAUTHENTICATED"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/ApiError"
+        "403":
+          "description": "403; ACCESS_DENIED; role/CSRF/chủ hold"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/ApiError"
+        "500":
+          "description": "500; INTERNAL_ERROR"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/ApiError"
+  "/api/guests":
+    "post":
+      "operationId": "createWalkInGuest"
+      "summary": "Tạo khách walk-in"
+      "description": "Không tạo tài khoản; không tự liên kết tài khoản theo email/phone."
+      "x-owner": "M3"
+      "x-roles":
+        - "FRONT_DESK"
+      "tags":
+        - "AuthGuest"
+      "security":
+        -
+          "SessionCookie": []
+          "CsrfToken": []
+      "requestBody":
+        "required": true
+        "content":
+          "application/json":
+            "schema":
+              "$ref": "#/components/schemas/CreateGuestRequest"
+      "responses":
+        "201":
+          "description": "Tạo thành công"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/GuestResponse"
+        "400":
+          "description": "400; VALIDATION_ERROR / dữ liệu không hợp lệ"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/ApiError"
+        "401":
+          "description": "401; UNAUTHENTICATED"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/ApiError"
+        "403":
+          "description": "403; ACCESS_DENIED; role/CSRF/chủ hold"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/ApiError"
+        "500":
+          "description": "500; INTERNAL_ERROR"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/ApiError"
+    "get":
+      "operationId": "searchGuests"
+      "summary": "Tìm hồ sơ khách"
+      "description": "Keyword tên/phone/email không rỗng sau trim; sort id tăng."
+      "x-owner": "M3"
+      "x-roles":
+        - "FRONT_DESK"
+      "tags":
+        - "AuthGuest"
+      "security":
+        -
+          "SessionCookie": []
+      "parameters":
+        -
+          "$ref": "#/components/parameters/Page"
+        -
+          "$ref": "#/components/parameters/Size"
+        -
+          "name": "keyword"
+          "in": "query"
+          "required": true
+          "schema":
+            "type": "string"
+            "minLength": 1
+      "responses":
+        "200":
+          "description": "Thành công"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/GuestPage"
+        "400":
+          "description": "400; VALIDATION_ERROR / dữ liệu không hợp lệ"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/ApiError"
+        "401":
+          "description": "401; UNAUTHENTICATED"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/ApiError"
+        "403":
+          "description": "403; ACCESS_DENIED; role/CSRF/chủ hold"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/ApiError"
+        "500":
+          "description": "500; INTERNAL_ERROR"
+          "content":
+            "application/json":
+              "schema":
+                "$ref": "#/components/schemas/ApiError"
+"components":
+  "securitySchemes":
+    "SessionCookie":
+      "type": "apiKey"
+      "in": "cookie"
+      "name": "JSESSIONID"
+      "description": "Tên mặc định đề xuất, cần M3 xác nhận. HTTP session, HttpOnly, Secure khi HTTPS; không JWT."
+    "CsrfToken":
+      "type": "apiKey"
+      "in": "header"
+      "name": "X-CSRF-TOKEN"
+      "description": "Lấy token và headerName từ GET /api/auth/csrf, lấy lại sau login/logout. Header này không thay phiên đăng nhập."
+  "parameters":
+    "Page":
+      "name": "page"
+      "in": "query"
+      "schema":
+        "type": "integer"
+        "minimum": 0
+        "default": 0
+    "Size":
+      "name": "size"
+      "in": "query"
+      "schema":
+        "type": "integer"
+        "minimum": 1
+        "maximum": 100
+        "default": 20
+    "roomId":
+      "name": "roomId"
+      "in": "path"
+      "required": true
+      "schema":
+        "$ref": "#/components/schemas/Id"
+    "bookingId":
+      "name": "bookingId"
+      "in": "path"
+      "required": true
+      "schema":
+        "$ref": "#/components/schemas/Id"
+    "serviceOrderId":
+      "name": "serviceOrderId"
+      "in": "path"
+      "required": true
+      "schema":
+        "$ref": "#/components/schemas/Id"
+    "invoiceId":
+      "name": "invoiceId"
+      "in": "path"
+      "required": true
+      "schema":
+        "$ref": "#/components/schemas/Id"
+    "holdToken":
+      "name": "holdToken"
+      "in": "path"
+      "required": true
+      "schema":
+        "type": "string"
+        "minLength": 1
+      "description": "Access log phải che token."
+  "schemas":
+    "Money":
+      "type": "string"
+      "pattern": "^(0|[1-9][0-9]{0,17})$"
+      "example": "1200000"
+      "description": "VND nguyên, không dấu phân cách, không exponent; BigDecimal / DECIMAL(18,0)."
+    "Id":
+      "type": "integer"
+      "format": "int64"
+      "minimum": 1
+      "maximum": 9007199254740991
+    "Currency":
+      "type": "string"
+      "enum":
+        - "VND"
+    "Role":
+      "type": "string"
+      "enum":
+        - "GUEST"
+        - "FRONT_DESK"
+        - "HOUSEKEEPING"
+    "BookingStatus":
+      "type": "string"
+      "enum":
+        - "CONFIRMED"
+        - "CHECKED_IN"
+        - "CHECKED_OUT"
+        - "CANCELLED"
+    "RoomStatus":
+      "type": "string"
+      "enum":
+        - "ACTIVE"
+        - "OUT_OF_SERVICE"
+    "HousekeepingStatus":
+      "type": "string"
+      "enum":
+        - "DIRTY"
+        - "IN_PROGRESS"
+        - "CLEAN"
+    "ServiceOrderStatus":
+      "type": "string"
+      "enum":
+        - "ORDERED"
+        - "CANCELLED"
+    "PaymentMethod":
+      "type": "string"
+      "enum":
+        - "CASH"
+    "PaymentStatus":
+      "type": "string"
+      "enum":
+        - "PAID"
+    "InvoiceItemType":
+      "type": "string"
+      "enum":
+        - "ROOM"
+        - "SERVICE"
+    "ErrorCode":
+      "type": "string"
+      "enum":
+        - "VALIDATION_ERROR"
+        - "INVALID_DATE_RANGE"
+        - "CHECK_IN_DATE_IN_PAST"
+        - "ROOM_NOT_FOUND"
+        - "ROOM_NOT_AVAILABLE"
+        - "ROOM_OUT_OF_SERVICE"
+        - "ROOM_NOT_CLEAN"
+        - "CAPACITY_EXCEEDED"
+        - "GUEST_NOT_FOUND"
+        - "BOOKING_NOT_FOUND"
+        - "INVALID_STATUS_TRANSITION"
+        - "CHECK_IN_NOT_ALLOWED_TODAY"
+        - "CANCELLATION_NOT_ALLOWED"
+        - "CHECK_OUT_DATE_NOT_SUPPORTED"
+        - "SERVICE_NOT_AVAILABLE"
+        - "DUPLICATE_SERVICE_ITEM"
+        - "BILL_CHANGED"
+        - "EMAIL_ALREADY_EXISTS"
+        - "UNAUTHENTICATED"
+        - "ACCESS_DENIED"
+        - "RESOURCE_BUSY"
+        - "ROOM_ON_HOLD"
+        - "HOLD_EXPIRED"
+        - "INVALID_HOLD"
+        - "HOLD_SERVICE_UNAVAILABLE"
+        - "INTERNAL_ERROR"
+    "FieldError":
+      "type": "object"
+      "required":
+        - "field"
+        - "message"
+      "properties":
+        "field":
+          "type": "string"
+        "message":
+          "type": "string"
+    "ApiError":
+      "type": "object"
+      "required":
+        - "code"
+        - "message"
+        - "fieldErrors"
+        - "details"
+        - "timestamp"
+      "properties":
+        "code":
+          "$ref": "#/components/schemas/ErrorCode"
+        "message":
+          "type": "string"
+        "fieldErrors":
+          "type": "array"
+          "items":
+            "$ref": "#/components/schemas/FieldError"
+        "details":
+          "type": "object"
+          "additionalProperties": true
+          "description": "BILL_CHANGED có currentTotalAmount dạng Money; lỗi khác mặc định {}."
+        "timestamp":
+          "type": "string"
+          "format": "date-time"
+    "RoomResponse":
+      "type": "object"
+      "required":
+        - "id"
+        - "roomNumber"
+        - "roomType"
+        - "capacity"
+        - "nightlyRate"
+        - "currency"
+        - "roomStatus"
+      "properties":
+        "id":
+          "$ref": "#/components/schemas/Id"
+        "roomNumber":
+          "type": "string"
+        "roomType":
+          "type": "string"
+        "capacity":
+          "type": "integer"
+          "format": "int32"
+          "minimum": 1
+        "nightlyRate":
+          "$ref": "#/components/schemas/Money"
+        "currency":
+          "$ref": "#/components/schemas/Currency"
+        "roomStatus":
+          "$ref": "#/components/schemas/RoomStatus"
+    "AvailableRoomResponse":
+      "type": "object"
+      "required":
+        - "id"
+        - "roomNumber"
+        - "roomType"
+        - "capacity"
+        - "nightlyRate"
+        - "currency"
+        - "roomStatus"
+        - "checkInDate"
+        - "checkOutDate"
+        - "nightCount"
+        - "roomAmount"
+      "properties":
+        "id":
+          "$ref": "#/components/schemas/Id"
+        "roomNumber":
+          "type": "string"
+        "roomType":
+          "type": "string"
+        "capacity":
+          "type": "integer"
+          "format": "int32"
+          "minimum": 1
+        "nightlyRate":
+          "$ref": "#/components/schemas/Money"
+        "currency":
+          "$ref": "#/components/schemas/Currency"
+        "roomStatus":
+          "$ref": "#/components/schemas/RoomStatus"
+        "checkInDate":
+          "type": "string"
+          "format": "date"
+        "checkOutDate":
+          "type": "string"
+          "format": "date"
+        "nightCount":
+          "type": "integer"
+          "format": "int32"
+          "minimum": 1
+        "roomAmount":
+          "$ref": "#/components/schemas/Money"
+    "CreateRoomHoldRequest":
+      "type": "object"
+      "required":
+        - "roomId"
+        - "checkInDate"
+        - "checkOutDate"
+        - "guestCount"
+      "properties":
+        "roomId":
+          "$ref": "#/components/schemas/Id"
+        "checkInDate":
+          "type": "string"
+          "format": "date"
+        "checkOutDate":
+          "type": "string"
+          "format": "date"
+        "guestCount":
+          "type": "integer"
+          "format": "int32"
+          "minimum": 1
+      "additionalProperties": false
+    "RoomHoldResponse":
+      "type": "object"
+      "required":
+        - "holdToken"
+        - "roomId"
+        - "checkInDate"
+        - "checkOutDate"
+        - "guestCount"
+        - "expiresAt"
+      "properties":
+        "holdToken":
+          "type": "string"
+          "writeOnly": false
+          "description": "Token khó đoán; không log, không đưa vào URL trang."
+        "roomId":
+          "$ref": "#/components/schemas/Id"
+        "checkInDate":
+          "type": "string"
+          "format": "date"
+        "checkOutDate":
+          "type": "string"
+          "format": "date"
+        "guestCount":
+          "type": "integer"
+          "format": "int32"
+          "minimum": 1
+        "expiresAt":
+          "type": "string"
+          "format": "date-time"
+    "GuestCreateBookingRequest":
+      "type": "object"
+      "required":
+        - "roomId"
+        - "checkInDate"
+        - "checkOutDate"
+        - "guestCount"
+        - "holdToken"
+      "properties":
+        "roomId":
+          "$ref": "#/components/schemas/Id"
+        "checkInDate":
+          "type": "string"
+          "format": "date"
+        "checkOutDate":
+          "type": "string"
+          "format": "date"
+        "guestCount":
+          "type": "integer"
+          "format": "int32"
+          "minimum": 1
+        "holdToken":
+          "type": "string"
+          "minLength": 1
+      "additionalProperties": false
+      "description": "GUEST: cấm gửi guestId, kể cả null; guestId lấy từ principal."
+    "FrontDeskCreateBookingRequest":
+      "type": "object"
+      "required":
+        - "roomId"
+        - "checkInDate"
+        - "checkOutDate"
+        - "guestCount"
+        - "holdToken"
+        - "guestId"
+      "properties":
+        "roomId":
+          "$ref": "#/components/schemas/Id"
+        "checkInDate":
+          "type": "string"
+          "format": "date"
+        "checkOutDate":
+          "type": "string"
+          "format": "date"
+        "guestCount":
+          "type": "integer"
+          "format": "int32"
+          "minimum": 1
+        "holdToken":
+          "type": "string"
+          "minLength": 1
+        "guestId":
+          "$ref": "#/components/schemas/Id"
+      "additionalProperties": false
+      "description": "FRONT_DESK: guestId bắt buộc tồn tại."
+    "CreateBookingRequest":
+      "oneOf":
+        -
+          "$ref": "#/components/schemas/GuestCreateBookingRequest"
+        -
+          "$ref": "#/components/schemas/FrontDeskCreateBookingRequest"
+      "description": "Service vẫn phải đối chiếu nhánh request với role; oneOf không thực thi phân quyền."
+    "BookingResponse":
+      "type": "object"
+      "required":
+        - "id"
+        - "bookingCode"
+        - "guestId"
+        - "guestName"
+        - "roomId"
+        - "roomNumber"
+        - "checkInDate"
+        - "checkOutDate"
+        - "guestCount"
+        - "nightCount"
+        - "nightlyRate"
+        - "roomAmount"
+        - "currency"
+        - "bookingStatus"
+        - "createdAt"
+        - "checkedInAt"
+        - "checkedOutAt"
+        - "cancelledAt"
+      "properties":
+        "id":
+          "$ref": "#/components/schemas/Id"
+        "bookingCode":
+          "type": "string"
+        "guestId":
+          "$ref": "#/components/schemas/Id"
+        "guestName":
+          "type": "string"
+        "roomId":
+          "$ref": "#/components/schemas/Id"
+        "roomNumber":
+          "type": "string"
+        "checkInDate":
+          "type": "string"
+          "format": "date"
+        "checkOutDate":
+          "type": "string"
+          "format": "date"
+        "guestCount":
+          "type": "integer"
+          "format": "int32"
+          "minimum": 1
+        "nightCount":
+          "type": "integer"
+          "format": "int32"
+          "minimum": 1
+        "nightlyRate":
+          "$ref": "#/components/schemas/Money"
+        "roomAmount":
+          "$ref": "#/components/schemas/Money"
+        "currency":
+          "$ref": "#/components/schemas/Currency"
+        "bookingStatus":
+          "$ref": "#/components/schemas/BookingStatus"
+        "createdAt":
+          "type": "string"
+          "format": "date-time"
+        "checkedInAt":
+          "type": "string"
+          "format": "date-time"
+          "nullable": true
+        "checkedOutAt":
+          "type": "string"
+          "format": "date-time"
+          "nullable": true
+        "cancelledAt":
+          "type": "string"
+          "format": "date-time"
+          "nullable": true
+    "HotelServiceResponse":
+      "type": "object"
+      "required":
+        - "id"
+        - "name"
+        - "unitPrice"
+        - "currency"
+      "properties":
+        "id":
+          "$ref": "#/components/schemas/Id"
+        "name":
+          "type": "string"
+        "unitPrice":
+          "$ref": "#/components/schemas/Money"
+        "currency":
+          "$ref": "#/components/schemas/Currency"
+    "ServiceOrderItemRequest":
+      "type": "object"
+      "required":
+        - "hotelServiceId"
+        - "quantity"
+      "properties":
+        "hotelServiceId":
+          "$ref": "#/components/schemas/Id"
+        "quantity":
+          "type": "integer"
+          "format": "int32"
+          "minimum": 1
+      "additionalProperties": false
+    "CreateServiceOrderRequest":
+      "type": "object"
+      "required":
+        - "items"
+      "properties":
+        "items":
+          "type": "array"
+          "minItems": 1
+          "items":
+            "$ref": "#/components/schemas/ServiceOrderItemRequest"
+          "description": "Không lặp hotelServiceId; backend kiểm tra theo ID, không chỉ uniqueItems."
+      "additionalProperties": false
+    "ServiceOrderItemResponse":
+      "type": "object"
+      "required":
+        - "id"
+        - "hotelServiceId"
+        - "serviceName"
+        - "quantity"
+        - "unitPrice"
+        - "lineAmount"
+      "properties":
+        "id":
+          "$ref": "#/components/schemas/Id"
+        "hotelServiceId":
+          "$ref": "#/components/schemas/Id"
+        "serviceName":
+          "type": "string"
+        "quantity":
+          "type": "integer"
+          "format": "int32"
+          "minimum": 1
+        "unitPrice":
+          "$ref": "#/components/schemas/Money"
+        "lineAmount":
+          "$ref": "#/components/schemas/Money"
+    "ServiceOrderResponse":
+      "type": "object"
+      "required":
+        - "id"
+        - "bookingId"
+        - "serviceOrderStatus"
+        - "items"
+        - "totalAmount"
+        - "currency"
+        - "createdAt"
+      "properties":
+        "id":
+          "$ref": "#/components/schemas/Id"
+        "bookingId":
+          "$ref": "#/components/schemas/Id"
+        "serviceOrderStatus":
+          "$ref": "#/components/schemas/ServiceOrderStatus"
+        "items":
+          "type": "array"
+          "minItems": 1
+          "items":
+            "$ref": "#/components/schemas/ServiceOrderItemResponse"
+        "totalAmount":
+          "$ref": "#/components/schemas/Money"
+        "currency":
+          "$ref": "#/components/schemas/Currency"
+        "createdAt":
+          "type": "string"
+          "format": "date-time"
+    "UpdateHousekeepingStatusRequest":
+      "type": "object"
+      "required":
+        - "housekeepingStatus"
+      "properties":
+        "housekeepingStatus":
+          "$ref": "#/components/schemas/HousekeepingStatus"
+      "additionalProperties": false
+    "HousekeepingRoomResponse":
+      "type": "object"
+      "required":
+        - "roomId"
+        - "roomNumber"
+        - "roomStatus"
+        - "housekeepingStatus"
+        - "isOccupied"
+      "properties":
+        "roomId":
+          "$ref": "#/components/schemas/Id"
+        "roomNumber":
+          "type": "string"
+        "roomStatus":
+          "$ref": "#/components/schemas/RoomStatus"
+        "housekeepingStatus":
+          "$ref": "#/components/schemas/HousekeepingStatus"
+        "isOccupied":
+          "type": "boolean"
+    "CheckOutRequest":
+      "type": "object"
+      "required":
+        - "expectedTotalAmount"
+        - "paymentMethod"
+        - "paymentConfirmed"
+      "properties":
+        "expectedTotalAmount":
+          "$ref": "#/components/schemas/Money"
+        "paymentMethod":
+          "$ref": "#/components/schemas/PaymentMethod"
+        "paymentConfirmed":
+          "type": "boolean"
+          "enum":
+            - true
+      "additionalProperties": false
+    "BillPreviewResponse":
+      "type": "object"
+      "required":
+        - "bookingId"
+        - "nightCount"
+        - "roomAmount"
+        - "serviceAmount"
+        - "totalAmount"
+        - "currency"
+        - "canCheckOut"
+      "properties":
+        "bookingId":
+          "$ref": "#/components/schemas/Id"
+        "nightCount":
+          "type": "integer"
+          "format": "int32"
+          "minimum": 1
+        "roomAmount":
+          "$ref": "#/components/schemas/Money"
+        "serviceAmount":
+          "$ref": "#/components/schemas/Money"
+        "totalAmount":
+          "$ref": "#/components/schemas/Money"
+        "currency":
+          "$ref": "#/components/schemas/Currency"
+        "canCheckOut":
+          "type": "boolean"
+    "InvoiceItemResponse":
+      "type": "object"
+      "required":
+        - "itemType"
+        - "description"
+        - "quantity"
+        - "unitPrice"
+        - "lineAmount"
+      "properties":
+        "itemType":
+          "$ref": "#/components/schemas/InvoiceItemType"
+        "description":
+          "type": "string"
+        "quantity":
+          "type": "integer"
+          "format": "int32"
+          "minimum": 1
+        "unitPrice":
+          "$ref": "#/components/schemas/Money"
+        "lineAmount":
+          "$ref": "#/components/schemas/Money"
+    "InvoiceResponse":
+      "type": "object"
+      "required":
+        - "id"
+        - "invoiceNumber"
+        - "bookingId"
+        - "guestName"
+        - "roomNumber"
+        - "checkInDate"
+        - "checkOutDate"
+        - "items"
+        - "roomAmount"
+        - "serviceAmount"
+        - "totalAmount"
+        - "currency"
+        - "paymentStatus"
+        - "paymentMethod"
+        - "paidAt"
+      "properties":
+        "id":
+          "$ref": "#/components/schemas/Id"
+        "invoiceNumber":
+          "type": "string"
+        "bookingId":
+          "$ref": "#/components/schemas/Id"
+        "guestName":
+          "type": "string"
+        "roomNumber":
+          "type": "string"
+        "checkInDate":
+          "type": "string"
+          "format": "date"
+        "checkOutDate":
+          "type": "string"
+          "format": "date"
+        "items":
+          "type": "array"
+          "minItems": 1
+          "items":
+            "$ref": "#/components/schemas/InvoiceItemResponse"
+        "roomAmount":
+          "$ref": "#/components/schemas/Money"
+        "serviceAmount":
+          "$ref": "#/components/schemas/Money"
+        "totalAmount":
+          "$ref": "#/components/schemas/Money"
+        "currency":
+          "$ref": "#/components/schemas/Currency"
+        "paymentStatus":
+          "$ref": "#/components/schemas/PaymentStatus"
+        "paymentMethod":
+          "$ref": "#/components/schemas/PaymentMethod"
+        "paidAt":
+          "type": "string"
+          "format": "date-time"
+    "AvailableRoomPage":
+      "type": "object"
+      "required":
+        - "items"
+        - "page"
+        - "size"
+        - "totalElements"
+      "properties":
+        "items":
+          "type": "array"
+          "items":
+            "$ref": "#/components/schemas/AvailableRoomResponse"
+        "page":
+          "type": "integer"
+          "minimum": 0
+        "size":
+          "type": "integer"
+          "minimum": 1
+          "maximum": 100
+        "totalElements":
+          "type": "integer"
+          "format": "int64"
+          "minimum": 0
+    "BookingPage":
+      "type": "object"
+      "required":
+        - "items"
+        - "page"
+        - "size"
+        - "totalElements"
+      "properties":
+        "items":
+          "type": "array"
+          "items":
+            "$ref": "#/components/schemas/BookingResponse"
+        "page":
+          "type": "integer"
+          "minimum": 0
+        "size":
+          "type": "integer"
+          "minimum": 1
+          "maximum": 100
+        "totalElements":
+          "type": "integer"
+          "format": "int64"
+          "minimum": 0
+    "HotelServicePage":
+      "type": "object"
+      "required":
+        - "items"
+        - "page"
+        - "size"
+        - "totalElements"
+      "properties":
+        "items":
+          "type": "array"
+          "items":
+            "$ref": "#/components/schemas/HotelServiceResponse"
+        "page":
+          "type": "integer"
+          "minimum": 0
+        "size":
+          "type": "integer"
+          "minimum": 1
+          "maximum": 100
+        "totalElements":
+          "type": "integer"
+          "format": "int64"
+          "minimum": 0
+    "ServiceOrderPage":
+      "type": "object"
+      "required":
+        - "items"
+        - "page"
+        - "size"
+        - "totalElements"
+      "properties":
+        "items":
+          "type": "array"
+          "items":
+            "$ref": "#/components/schemas/ServiceOrderResponse"
+        "page":
+          "type": "integer"
+          "minimum": 0
+        "size":
+          "type": "integer"
+          "minimum": 1
+          "maximum": 100
+        "totalElements":
+          "type": "integer"
+          "format": "int64"
+          "minimum": 0
+    "HousekeepingRoomPage":
+      "type": "object"
+      "required":
+        - "items"
+        - "page"
+        - "size"
+        - "totalElements"
+      "properties":
+        "items":
+          "type": "array"
+          "items":
+            "$ref": "#/components/schemas/HousekeepingRoomResponse"
+        "page":
+          "type": "integer"
+          "minimum": 0
+        "size":
+          "type": "integer"
+          "minimum": 1
+          "maximum": 100
+        "totalElements":
+          "type": "integer"
+          "format": "int64"
+          "minimum": 0
+    "InvoicePage":
+      "type": "object"
+      "required":
+        - "items"
+        - "page"
+        - "size"
+        - "totalElements"
+      "properties":
+        "items":
+          "type": "array"
+          "items":
+            "$ref": "#/components/schemas/InvoiceResponse"
+        "page":
+          "type": "integer"
+          "minimum": 0
+        "size":
+          "type": "integer"
+          "minimum": 1
+          "maximum": 100
+        "totalElements":
+          "type": "integer"
+          "format": "int64"
+          "minimum": 0
+    "UserResponse":
+      "type": "object"
+      "required":
+        - "id"
+        - "email"
+        - "role"
+        - "guestId"
+      "properties":
+        "id":
+          "$ref": "#/components/schemas/Id"
+        "email":
+          "type": "string"
+          "format": "email"
+          "maxLength": 254
+        "role":
+          "$ref": "#/components/schemas/Role"
+        "guestId":
+          "type": "integer"
+          "format": "int64"
+          "minimum": 1
+          "maximum": 9007199254740991
+          "nullable": true
+    "GuestResponse":
+      "type": "object"
+      "required":
+        - "id"
+        - "fullName"
+        - "phone"
+        - "email"
+        - "hasAccount"
+      "properties":
+        "id":
+          "$ref": "#/components/schemas/Id"
+        "fullName":
+          "type": "string"
+          "minLength": 1
+          "maxLength": 150
+        "phone":
+          "type": "string"
+          "minLength": 8
+          "maxLength": 20
+          "pattern": "^[-0-9 +]+$"
+        "email":
+          "type": "string"
+          "format": "email"
+          "maxLength": 254
+          "nullable": true
+        "hasAccount":
+          "type": "boolean"
+    "GuestPage":
+      "type": "object"
+      "required":
+        - "items"
+        - "page"
+        - "size"
+        - "totalElements"
+      "properties":
+        "items":
+          "type": "array"
+          "items":
+            "$ref": "#/components/schemas/GuestResponse"
+        "page":
+          "type": "integer"
+          "minimum": 0
+        "size":
+          "type": "integer"
+          "minimum": 1
+          "maximum": 100
+        "totalElements":
+          "type": "integer"
+          "format": "int64"
+          "minimum": 0
+    "RegisterRequest":
+      "type": "object"
+      "required":
+        - "email"
+        - "password"
+        - "fullName"
+        - "phone"
+      "properties":
+        "email":
+          "type": "string"
+          "format": "email"
+          "maxLength": 254
+        "password":
+          "type": "string"
+          "minLength": 8
+          "maxLength": 128
+          "writeOnly": true
+        "fullName":
+          "type": "string"
+          "minLength": 1
+          "maxLength": 150
+        "phone":
+          "type": "string"
+          "minLength": 8
+          "maxLength": 20
+          "pattern": "^[-0-9 +]+$"
+      "additionalProperties": false
+    "LoginRequest":
+      "type": "object"
+      "required":
+        - "email"
+        - "password"
+      "properties":
+        "email":
+          "type": "string"
+          "format": "email"
+          "maxLength": 254
+        "password":
+          "type": "string"
+          "writeOnly": true
+      "additionalProperties": false
+    "CreateGuestRequest":
+      "type": "object"
+      "required":
+        - "fullName"
+        - "phone"
+      "properties":
+        "fullName":
+          "type": "string"
+          "minLength": 1
+          "maxLength": 150
+        "phone":
+          "type": "string"
+          "minLength": 8
+          "maxLength": 20
+          "pattern": "^[-0-9 +]+$"
+        "email":
+          "type": "string"
+          "format": "email"
+          "maxLength": 254
+      "additionalProperties": false
+    "UpdateGuestRequest":
+      "type": "object"
+      "required": []
+      "properties":
+        "fullName":
+          "type": "string"
+          "minLength": 1
+          "maxLength": 150
+        "phone":
+          "type": "string"
+          "minLength": 8
+          "maxLength": 20
+          "pattern": "^[-0-9 +]+$"
+      "additionalProperties": false
+    "CsrfResponse":
+      "type": "object"
+      "required":
+        - "token"
+        - "headerName"
+      "properties":
+        "token":
+          "type": "string"
+        "headerName":
+          "type": "string"
+          "example": "X-CSRF-TOKEN"
+"x-pending-decisions": "docs/m2-decisions.md"
