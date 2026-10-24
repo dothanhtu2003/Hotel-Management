@@ -1,0 +1,40 @@
+.idea/
+*.iml
+
+# Local IDE and operating-system files
+.vscode/
+*.iws
+*.ipr
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Local secrets; keep sanitized templates available to the team
+.env
+.env.*
+!.env.example
+!.env.sample
+!.env.template
+application-local.properties
+application-local.yml
+application-local.yaml
+*.key
+*.p12
+*.pfx
+*.jks
+
+# Build output, logs and JVM crash/heap dumps
+target/
+*.log
+logs/
+hs_err_pid*
+replay_pid*
+*.hprof
+
+# Local database/Redis data and backups (keep Flyway SQL migrations tracked)
+/mysql-data/
+/redis-data/
+/database-dumps/
+/backups/
+dump.rdb
+appendonlydir/
