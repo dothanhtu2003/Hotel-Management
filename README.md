@@ -18,7 +18,7 @@ Nhóm gồm 4 thành viên:
 
 - **Thành viên 1 (Phommasone) – Frontend:** Phụ trách giao diện người dùng.
 - **Thành viên 2 (SU) – Backend:** Phụ trách xử lý các chức năng nghiệp vụ.
-- **Thành viên 3 (Tu) – Lead:** Phụ trách thiết kế và quản lý git.
+- **Thành viên 3 (Tu) – Nhóm trưởng:** Phụ trách quản lý repository, tổ chức nhánh, kiểm tra và gộp Pull Request.
 - **Thành viên 4 (Shinn thant) – Testing:** Phụ trách kiểm thử và đánh giá hệ thống.
 
 
@@ -31,20 +31,17 @@ Nhóm gồm 4 thành viên:
 
 ## 4. Cấu trúc dự án
 
+```text
 Hotel-Management/
-│
 ├── README.md
 ├── .gitignore
-│
 ├── docs/
 │   ├── architecture.md
 │   ├── database-design.md
 │   └── ui-design.md
-│
 ├── backend/
-│
 └── frontend/
-
+```
 
 ## 5. Hướng dẫn cài đặt
 
