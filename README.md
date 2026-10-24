@@ -1,15 +1,120 @@
 # Hotel Reservation & Guest Service Management Platform
 
-Java 21 / Spring Boot 4.1.1 / Maven. JUnit 6 đã được chấp nhận ngày 15/10/2026.
+## 1. Giới thiệu
 
-**Hiện trạng: mới có khung backend và phần M2 độc lập; backend nghiệp vụ chưa hoàn tất.**
-Chưa có Controller/Service nghiệp vụ hoặc Entity/Repository/security/Redis của M3.
+Hệ thống quản lý đặt phòng và dịch vụ khách sạn (Hotel Reservation & Guest Service Management Platform) là dự án hỗ trợ quản lý các hoạt động đặt phòng, lưu trú, sử dụng dịch vụ và thanh toán tại khách sạn.
 
-- [Hướng dẫn chạy test và báo cáo giới hạn](docs/m2-handoff.md)
-- [Checklist ưu tiên gửi M3 để hoàn thành luồng đặt phòng](docs/m2-m3-dependencies.md)
-- [OpenAPI mục tiêu](docs/api-contract.yaml)
-- [Ma trận quyền](docs/m2-permission-matrix.md)
-- [Quy tắc chuyển trạng thái](docs/m2-state-rules.md)
-- [Quyết định cần nhóm chốt](docs/m2-decisions.md)
+Các chức năng dự kiến:
+- Tìm kiếm phòng còn trống.
+- Đặt phòng theo ngày nhận và trả phòng.
+- Quản lý thông tin đặt phòng.
+- Đặt và quản lý dịch vụ phòng.
+- Theo dõi trạng thái dọn phòng.
+- Quản lý hóa đơn và trả phòng.
 
-OpenAPI/test độc lập không phải bằng chứng MySQL/Redis, khóa, rollback, session hoặc CSRF đã hoạt động.
+## 2. Thành viên nhóm
+
+Nhóm gồm 4 thành viên:
+
+- **Thành viên 1 (Phommasone) – Frontend:** Phụ trách giao diện người dùng.
+- **Thành viên 2 (SU) – Backend:** Phụ trách xử lý các chức năng nghiệp vụ.
+- **Thành viên 3 (Tu) – Lead:** Phụ trách thiết kế và quản lý git.
+- **Thành viên 4 (Shinn thant) – Testing:** Phụ trách kiểm thử và đánh giá hệ thống.
+
+
+## 3. Công nghệ sử dụng
+
+- **Frontend:** HTML, CSS, JavaScript.
+- **Backend:** Java, Spring Boot .
+- **Database:** PostgreSQL .
+- **Testing:** JUnit.
+
+## 4. Cấu trúc dự án
+
+Hotel-Management/
+│
+├── README.md
+├── .gitignore
+│
+├── docs/
+│   ├── architecture.md
+│   ├── database-design.md
+│   └── ui-design.md
+│
+├── backend/
+│
+└── frontend/
+
+
+## 5. Hướng dẫn cài đặt
+
+**Yêu cầu:**
+- Git.
+- Tài khoản GitHub.
+- Visual Studio Code hoặc trình soạn thảo văn bản.
+
+Clone repository về máy:
+
+```bash
+git clone https://github.com/dothanhtu2003/Hotel-Management.git
+```
+
+Di chuyển vào thư mục dự án:
+
+```bash
+cd Hotel-Management
+```
+
+## 6. Hướng dẫn chạy
+
+
+Kiểm tra nhánh hiện tại:
+
+```bash
+git branch
+```
+
+Cập nhật phiên bản mới nhất:
+
+```bash
+git pull origin main
+```
+
+Tạo nhánh mới:
+
+```bash
+git switch -c feature/frontend-setup
+```
+
+Thêm và lưu thay đổi:
+
+```bash
+git add .
+git commit -m "Setup project structure"
+```
+
+Đẩy nhánh lên GitHub:
+
+```bash
+git push -u origin feature/frontend-setup
+```
+
+Sau đó tạo Pull Request trên GitHub để đề nghị gộp thay đổi vào nhánh chính.
+
+## 7. Kiểm thử
+
+Các nội dung kiểm tra:
+- Các thành viên tạo nhánh riêng thành công.
+- Các file và thư mục được quản lý bằng Git.
+- Commit và push thành công lên GitHub.
+- Tạo Pull Request thành công.
+- Xử lý xung đột khi gộp nhánh.
+- Gộp các nhánh vào `main` thành công.
+- Các thành viên cập nhật được phiên bản mới nhất bằng `git pull`.
+
+
+---
+
+**Repository:** https://github.com/dothanhtu2003/Hotel-Management
+
+**Mục đích:** Thực hành quy trình quản lý mã nguồn và làm việc nhóm bằng Git/GitHub trong Lab 07.
